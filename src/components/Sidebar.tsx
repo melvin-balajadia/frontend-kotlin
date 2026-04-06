@@ -3,6 +3,7 @@ import type { SidebarProps } from "../types/layout";
 import { sidebarMenu } from "./utils/SidebarMenu";
 import { LuChevronDown } from "react-icons/lu";
 import { useState } from "react";
+import logo from "@/assets/logo2.png";
 
 export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const location = useLocation();
@@ -27,11 +28,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
         md:translate-x-0 transition-transform duration-300 border-r border-gray-100`}
       >
         <div className="p-5">
-          <img
-            src="src/assets/logo2.png"
-            alt="No Image"
-            className="h-18 object-contain"
-          />
+          <img src={logo} alt="No Image" className="h-18 object-contain" />
         </div>
 
         <nav className="flex flex-col p-4 gap-1">
