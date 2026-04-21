@@ -664,7 +664,7 @@ export default function EditTransactionEntries() {
                   <tr>
                     {[
                       "HU Number",
-                      "Stock/Batch Code",
+                      "Batch Code",
                       "Pallet No.",
                       "Item Count",
                       "Date",
@@ -711,7 +711,7 @@ export default function EditTransactionEntries() {
                           {item.hu_number}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400">
-                          —
+                          {item.hu_batch_code}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {item.hu_palletnumber}

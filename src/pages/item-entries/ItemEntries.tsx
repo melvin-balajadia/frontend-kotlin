@@ -167,11 +167,12 @@ export default function ItemEntriesPage() {
             <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
               <tr>
                 {[
-                  "Stock/Batch Code",
-                  "Production Code",
+                  "Item Code",
+                  "Item Description",
+                  "Batch Code",
                   "Item PD",
                   "Item CU",
-                  "Weight",
+                  "Value",
                   "Date Added",
                   "Action",
                 ].map((h) => (
@@ -210,11 +211,14 @@ export default function ItemEntriesPage() {
                     key={item.items_id}
                     className="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors"
                   >
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {item.items_item_code}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                      {item.items_item_description}
+                    </td>
                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
                       {item.items_batch_code}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {item.items_production_code}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {item.items_pd}
@@ -299,7 +303,7 @@ export default function ItemEntriesPage() {
                       Pallet
                     </p>
                     <p className="mt-0.5 text-gray-700 dark:text-gray-300 font-medium">
-                      {item.items_production_code}
+                      {item.items_item_code}
                     </p>
                   </div>
                 </div>

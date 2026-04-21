@@ -27,7 +27,8 @@ export function AddHuModal({ onClose, huId, toast }: AddHuModalProps) {
     resolver: zodResolver(HuEntryFormSchema) as Resolver<HuEntryFormValues>,
     defaultValues: {
       hu_number: "",
-      hu_palletnumber: "",
+      hu_batch_code: "",
+      hu_description: "",
       hu_status: 0,
       hu_transaction_id: huId,
     },
@@ -93,7 +94,7 @@ export function AddHuModal({ onClose, huId, toast }: AddHuModalProps) {
                 id="hu_number"
                 type="text"
                 {...register("hu_number")}
-                placeholder="e.g. HU00055"
+                placeholder="e.g. HU0001"
                 className="border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
               />
               {errors.hu_number && (
@@ -106,21 +107,46 @@ export function AddHuModal({ onClose, huId, toast }: AddHuModalProps) {
             {/* Pallet Number */}
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="hu_palletnumber"
+                htmlFor="hu_batch_code"
                 className="text-sm font-medium text-gray-700 dark:text-gray-300"
               >
-                Pallet No.
+                Batch Code
               </label>
               <input
                 id="hu_palletnumber"
                 type="text"
-                {...register("hu_palletnumber")}
-                placeholder="e.g. PALLET004"
+                {...register("hu_batch_code")}
+                placeholder="e.g. BATCH001"
                 className="border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
               />
-              {errors.hu_palletnumber && (
+              {errors.hu_batch_code && (
                 <span className="text-xs text-red-500">
-                  {errors.hu_palletnumber.message}
+                  {errors.hu_batch_code.message}
+                </span>
+              )}
+            </div>
+
+            {/* Pallet Number */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="hu_batch_code"
+                className="text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                Description{" "}
+                <span className="italic font-normal text-gray-500">
+                  (Optional)
+                </span>
+              </label>
+              <textarea
+                id="hu_description"
+                rows={3}
+                {...register("hu_description")}
+                placeholder="Write something"
+                className="border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
+              />
+              {errors.hu_description && (
+                <span className="text-xs text-red-500">
+                  {errors.hu_description.message}
                 </span>
               )}
             </div>
