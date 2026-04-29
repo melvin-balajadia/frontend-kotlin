@@ -1,4 +1,4 @@
-import { LuPackage, LuSettings } from "react-icons/lu";
+import { LuPackage, LuChartColumnBig } from "react-icons/lu";
 
 export interface MenuItem {
   label: string;
@@ -14,10 +14,15 @@ export const sidebarMenu: MenuItem[] = [
     icon: LuPackage,
   },
   {
-    label: "Settings",
-    path: "/settings",
-    icon: LuSettings,
+    label: "Reports",
+    path: "/reports",
+    icon: LuChartColumnBig,
   },
+  // {
+  //   label: "Settings",
+  //   path: "/settings",
+  //   icon: LuSettings,
+  // },
   // {
   //   label: "Link 3",
   //   icon: LuHouse,

@@ -3,6 +3,7 @@ import { axiosClient } from "@/config/axiosClient";
 import {
   TransactionEntriesSchema,
   TransactionEntrySchema,
+  TransactionReportSchema,
 } from "./transactionEntries.schema";
 import type { TransactionEntryFormValues } from "./transactionEntries.schema";
 import type { FetchParams, PaginationMeta } from "@/components/CustomDataTable";
@@ -70,4 +71,11 @@ export const updateTransactionEntry = async ({
 }) => {
   const { data } = await axiosClient.put(`/transaction-entry/${id}`, payload);
   return data;
+};
+
+export const getTransactionReport = async (transactionId: string | number) => {
+  const { data } = await axiosClient.get(
+    `/transaction-report/${transactionId}`,
+  );
+  return TransactionReportSchema.parse(data.data);
 };

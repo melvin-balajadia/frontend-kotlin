@@ -39,6 +39,54 @@ export const TransactionEntryFormSchema = z.object({
   transaction_description: z.string().optional(),
 });
 
+export const ItemEntryReportSchema = z.object({
+  items_id: z.number(),
+  items_hu_id: z.number(),
+  items_item_code: z.string().nullable(),
+  items_item_description: z.string().nullable(),
+  items_batch_code: z.string().nullable(),
+  items_pd: z.string().nullable(),
+  items_cu: z.string().nullable(),
+  items_weight: z.string().nullable(),
+  items_status: z.number(),
+  created_at: z.string().nullable(),
+  updated_at: z.string().nullable(),
+});
+
+export const HuEntryReportSchema = z.object({
+  hu_id: z.number(),
+  hu_transaction_id: z.number(),
+  hu_number: z.string().nullable(),
+  hu_palletnumber: z.string().nullable(),
+  hu_batch_code: z.string().nullable(),
+  hu_description: z.string().nullable(),
+  hu_status: z.number(),
+  created_at: z.string().nullable(),
+  updated_at: z.string().nullable(),
+  items: z.array(ItemEntryReportSchema),
+});
+
+export const TransactionReportSchema = z.object({
+  transaction_id: z.number(),
+  transaction_idn: z.string().nullable(),
+  transaction_transaction_type: z.string().nullable(),
+  transaction_client: z.string().nullable(),
+  transaction_trucking_pn: z.string().nullable(),
+  transaction_start_date: z.string().nullable(),
+  transaction_end_date: z.string().nullable(),
+  transaction_start_time: z.string().nullable(),
+  transaction_end_time: z.string().nullable(),
+  transaction_date: z.string().nullable(),
+  transaction_status: z.number(),
+  created_at: z.string().nullable(),
+  updated_at: z.string().nullable(),
+  hu_list: z.array(HuEntryReportSchema),
+});
+
+export type TransactionReport = z.infer<typeof TransactionReportSchema>;
+export type HuEntryReport = z.infer<typeof HuEntryReportSchema>;
+export type ItemEntryReport = z.infer<typeof ItemEntryReportSchema>;
+
 // Inferred TypeScript type for the form
 export type TransactionEntryFormValues = z.infer<
   typeof TransactionEntryFormSchema

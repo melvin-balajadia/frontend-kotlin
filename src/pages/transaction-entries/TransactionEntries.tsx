@@ -2,7 +2,8 @@
 import { getPaginatedTransactionEntries } from "@/api/transactions/transactionEntries.api";
 import { DataTable, type ColumnDef } from "@/components/CustomDataTable";
 import { useNavigate } from "react-router-dom";
-import { LuPackage, LuPlus } from "react-icons/lu";
+import { LuPackage, LuPlus, LuPrinter } from "react-icons/lu";
+import PrintReportButton from "@/components/transactions/PrintReport";
 
 interface Transaction extends Record<string, unknown> {
   transaction_id: number;
@@ -69,12 +70,11 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* Back Button */}
         <button
           onClick={() => navigate("/transaction-entries/add")}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition font-medium disabled:opacity-50"
         >
-          <LuPlus className={"w-3.5 h-3.5"} />
+          <LuPlus className="w-3.5 h-3.5" />
           New Transaction
         </button>
       </div>
@@ -99,6 +99,21 @@ export default function TransactionsPage() {
           }
         }}
         onSelectionChange={(rows) => console.log("Selected:", rows)}
+        // ── Wires PrintReportButton into the per-row dropdown ──
+        extraActions={(row) => (
+          <>
+            <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+            <PrintReportButton
+              transactionId={row.transaction_id}
+              // Renders as a plain dropdown item — matches your DataTable style
+              className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              icon={
+                <LuPrinter className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              }
+              label="Print Report"
+            />
+          </>
+        )}
       />
     </div>
   );

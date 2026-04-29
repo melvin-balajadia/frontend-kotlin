@@ -173,6 +173,7 @@ export default function ItemEntriesPage() {
                   "Item PD",
                   "Item CU",
                   "Value",
+                  "UOM",
                   "Date Added",
                   "Action",
                 ].map((h) => (
@@ -229,6 +230,7 @@ export default function ItemEntriesPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       {item.items_weight}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap">KG</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {item.created_at
                         ? new Date(item.created_at).toLocaleDateString(
