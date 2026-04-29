@@ -1,15 +1,9 @@
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
-
 WORKDIR /app
-
 COPY package*.json ./
-
-# ci is faster, stricter, and reproducible — better for production builds
 RUN npm ci
-
 COPY . .
-
 RUN npm run build
 
 # ─── Stage 2: Serve ───────────────────────────────────────────────────────────
@@ -19,14 +13,12 @@ FROM nginx:stable-alpine
 RUN rm -rf /usr/share/nginx/html/*
 
 # Copy build output from builder stage
-# ← Vite outputs to /dist, CRA outputs to /build — use whichever matches yours
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx config into the image
-# ← baked in so the image works standalone without relying on host bind-mount
+# Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Nginx runs on 443 for HTTPS and 80 for HTTP redirect
-EXPOSE 80 443
+# Only port 80 — SSL is terminated at the host level, not inside the container
+EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
