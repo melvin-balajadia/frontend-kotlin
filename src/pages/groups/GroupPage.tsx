@@ -393,7 +393,7 @@ function PermissionsModal({
     });
   };
 
-  const toggleGroup = (groupName: string, perms: Permission[]) => {
+  const toggleGroup = (_groupName: string, perms: Permission[]) => {
     const allSelected = perms.every((p) => selected.has(p.permission_id));
     setSelected((prev) => {
       const next = new Set(prev);
