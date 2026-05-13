@@ -20,4 +20,21 @@ export const queryKeys = {
     detail: (id: string | number) =>
       [...queryKeys.itemEntries.all, "detail", id] as const,
   },
+  users: {
+    all: ["users"] as const,
+    list: (page?: number, status?: string) =>
+      [...queryKeys.users.all, "list", page, status] as const,
+    detail: (id: string | number) =>
+      [...queryKeys.users.all, "detail", id] as const,
+  },
+  groups: {
+    all: ["groups"] as const,
+    list: () => [...queryKeys.groups.all, "list"] as const,
+    detail: (id: string | number) =>
+      [...queryKeys.groups.all, "detail", id] as const,
+  },
+  permissions: {
+    all: ["permissions"] as const,
+    list: () => [...queryKeys.permissions.all, "list"] as const,
+  },
 };

@@ -18,6 +18,8 @@ const EditTransactionEntries = lazy(
 );
 
 const ItemEntries = lazy(() => import("@/pages/item-entries/ItemEntries"));
+const AddUserPage = lazy(() => import("@/pages/users/UserPage"));
+const GroupPage = lazy(() => import("@/pages/groups/GroupPage"));
 
 const PageNotFound = lazy(() => import("@/pages/PageNotFound"));
 
@@ -46,6 +48,8 @@ export default function AppRoutes() {
                 path="transaction-entries/item-entries/:id"
                 element={<ItemEntries />}
               />
+              <Route path="user-management" element={<AddUserPage />} />
+              <Route path="group-management" element={<GroupPage />} />
               <Route path="settings" element={<Settings />} />
               <Route path="*" element={<PageNotFound />} />
             </Route>
