@@ -65,7 +65,7 @@ const TIME_FIELDS = [
 type DropdownItem = { hu_id: number | string; [key: string]: unknown };
 
 // ── Approval action modal ─────────────────────────────────────────────────────
-// Shared modal for Reject and Return — shows an optional comment field.
+// Shared modal for approval actions — shows an optional comment field.
 
 type ActionModalProps = {
   title: string;
@@ -73,6 +73,7 @@ type ActionModalProps = {
   confirmLabel: string;
   confirmClass: string;
   isPending: boolean;
+  showComment?: boolean;
   onConfirm: (comment?: string) => void;
   onClose: () => void;
 };
@@ -83,6 +84,7 @@ function ActionModal({
   confirmLabel,
   confirmClass,
   isPending,
+  showComment = true,
   onConfirm,
   onClose,
 }: ActionModalProps) {
@@ -107,19 +109,21 @@ function ActionModal({
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {description}
           </p>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Comment{" "}
-              <span className="text-gray-400 font-normal">(optional)</span>
-            </label>
-            <textarea
-              rows={3}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Add a reason or note…"
-              className="border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 rounded focus:ring-1 focus:ring-blue-500 outline-none transition text-sm resize-none w-full"
-            />
-          </div>
+          {showComment && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Comment{" "}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <textarea
+                rows={3}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Add a reason or note…"
+                className="border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 rounded focus:ring-1 focus:ring-blue-500 outline-none transition text-sm resize-none w-full"
+              />
+            </div>
+          )}
           <div className="flex justify-end gap-2 mt-1">
             <button
               type="button"
@@ -147,7 +151,7 @@ function ActionModal({
 
 type ApprovalStep = {
   label: string;
-  status: "completed" | "current" | "pending" | "rejected";
+  status: "completed" | "current" | "pending" | "rejected" | "returned";
   date?: string;
   actor?: string;
   comment?: string;
@@ -160,12 +164,6 @@ function ApprovalTimeline({
   transactionStatus: number;
   logs: ApprovalLog[];
 }) {
-  // Build a lookup: toStatus → the log entry for that step
-  const logByToStatus = logs.reduce<Record<number, ApprovalLog>>((acc, log) => {
-    acc[log.log_to_status] = log;
-    return acc;
-  }, {});
-
   // Find the last rejection/return log if status is 5 or 6
   const terminalLog =
     transactionStatus === 5 || transactionStatus === 6
@@ -174,21 +172,47 @@ function ApprovalTimeline({
           .find((l) => l.log_action === "reject" || l.log_action === "return")
       : undefined;
 
+  const latestReturnIndex = logs.reduce(
+    (latest, log, index) => (log.log_action === "return" ? index : latest),
+    -1,
+  );
+  const currentCycleLogs =
+    latestReturnIndex >= 0 ? logs.slice(latestReturnIndex + 1) : logs;
+
+  // Build a lookup for the active approval cycle only. Historical logs remain
+  // in the audit trail but do not make a returned draft look submitted.
+  const logByToStatus = currentCycleLogs.reduce<Record<number, ApprovalLog>>(
+    (acc, log) => {
+      acc[log.log_to_status] = log;
+      return acc;
+    },
+    {},
+  );
+
+  const pendingStepByStatus: Record<number, number> = {
+    0: 0,
+    1: 2,
+    2: 3,
+  };
+
   const getStepStatus = (stepIndex: number): ApprovalStep["status"] => {
     const isTerminal = transactionStatus === 5 || transactionStatus === 6;
 
     if (isTerminal) {
-      const rejectedAtStatus = terminalLog?.log_from_status ?? 1;
-      const rejectedAtStep = rejectedAtStatus; // status == step index here
-      if (stepIndex < rejectedAtStep) return "completed";
-      if (stepIndex === rejectedAtStep) return "rejected";
+      const terminalFromStatus = terminalLog?.log_from_status ?? 1;
+      const terminalStep = pendingStepByStatus[terminalFromStatus] ?? 2;
+      if (stepIndex < terminalStep) return "completed";
+      if (stepIndex === terminalStep) {
+        return transactionStatus === 6 ? "returned" : "rejected";
+      }
       return "pending";
     }
 
-    if (transactionStatus === 0) return stepIndex === 0 ? "current" : "pending";
-    if (transactionStatus === 4) return "completed";
-    if (stepIndex < transactionStatus) return "completed";
-    if (stepIndex === transactionStatus) return "current";
+    if (transactionStatus === 3 || transactionStatus === 4) return "completed";
+
+    const currentStep = pendingStepByStatus[transactionStatus] ?? 0;
+    if (stepIndex < currentStep) return "completed";
+    if (stepIndex === currentStep) return "current";
     return "pending";
   };
 
@@ -196,22 +220,22 @@ function ApprovalTimeline({
     { label: "Draft", toStatus: 0 },
     { label: "Submitted", toStatus: 1 },
     { label: "Checked by", toStatus: 2 },
-    { label: "Noted by", toStatus: 3 },
-    { label: "Completed", toStatus: 4 },
+    { label: "Noted by", toStatus: 4 },
   ];
+
+  const formatLogDate = (value: string) =>
+    new Date(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
 
   const steps: ApprovalStep[] = STEP_DEFINITIONS.map((def, idx) => {
     const log = logByToStatus[def.toStatus];
     return {
       label: def.label,
       status: getStepStatus(idx),
-      date: log
-        ? new Date(log.log_created_at).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          })
-        : undefined,
+      date: log ? formatLogDate(log.log_created_at) : undefined,
       actor: log?.log_actor_name,
       comment: log?.log_comment ?? undefined,
     };
@@ -219,66 +243,110 @@ function ApprovalTimeline({
 
   const statusConfig = {
     completed: {
-      dot: "bg-green-500 border-green-500",
-      icon: <LuCheck className="w-3 h-3 text-white" />,
-      label: "text-green-600 dark:text-green-400",
-      line: "bg-green-400",
+      dot: "bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-300",
+      icon: <LuCheck className="w-3.5 h-3.5" />,
+      label: "text-slate-800 dark:text-slate-100",
+      meta: "text-slate-500 dark:text-slate-400",
+      line: "bg-emerald-200 dark:bg-emerald-800/70",
+      pill: "bg-white text-emerald-700 border-emerald-200 dark:bg-slate-900 dark:text-emerald-300 dark:border-emerald-800",
+      stateLabel: "Done",
     },
     current: {
-      dot: "bg-blue-500 border-blue-500 animate-pulse",
-      icon: <LuClock className="w-3 h-3 text-white" />,
-      label: "text-blue-600 dark:text-blue-400 font-semibold",
-      line: "bg-gray-200 dark:bg-gray-700",
+      dot: "bg-blue-50 border-blue-300 text-blue-700 ring-2 ring-blue-50 dark:bg-blue-950/40 dark:border-blue-700 dark:text-blue-300 dark:ring-blue-950/50",
+      icon: <LuClock className="w-3.5 h-3.5" />,
+      label: "text-slate-900 dark:text-slate-100",
+      meta: "text-slate-500 dark:text-slate-400",
+      line: "bg-slate-200 dark:bg-slate-700",
+      pill: "bg-white text-blue-700 border-blue-200 dark:bg-slate-900 dark:text-blue-300 dark:border-blue-800",
+      stateLabel: "Current",
     },
     pending: {
-      dot: "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600",
+      dot: "bg-white dark:bg-gray-900 border-slate-300 dark:border-slate-600 text-slate-400",
       icon: null,
-      label: "text-gray-400 dark:text-gray-500",
-      line: "bg-gray-200 dark:bg-gray-700",
+      label: "text-slate-500 dark:text-slate-400",
+      meta: "text-slate-400 dark:text-slate-500",
+      line: "bg-slate-200 dark:bg-slate-700",
+      pill: "bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
+      stateLabel: "Waiting",
     },
     rejected: {
-      dot: "bg-red-500 border-red-500",
-      icon: <LuX className="w-3 h-3 text-white" />,
-      label: "text-red-500 dark:text-red-400 font-semibold",
-      line: "bg-gray-200 dark:bg-gray-700",
+      dot: "bg-red-50 border-red-300 text-red-700 ring-2 ring-red-50 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300 dark:ring-red-950/50",
+      icon: <LuX className="w-3.5 h-3.5" />,
+      label: "text-slate-900 dark:text-slate-100",
+      meta: "text-slate-500 dark:text-slate-400",
+      line: "bg-slate-200 dark:bg-slate-700",
+      pill: "bg-white text-red-700 border-red-200 dark:bg-slate-900 dark:text-red-300 dark:border-red-800",
+      stateLabel: "Stopped",
+    },
+    returned: {
+      dot: "bg-amber-50 border-amber-300 text-amber-700 ring-2 ring-amber-50 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300 dark:ring-amber-950/50",
+      icon: <LuUndo2 className="w-3.5 h-3.5" />,
+      label: "text-slate-900 dark:text-slate-100",
+      meta: "text-slate-500 dark:text-slate-400",
+      line: "bg-slate-200 dark:bg-slate-700",
+      pill: "bg-white text-amber-700 border-amber-200 dark:bg-slate-900 dark:text-amber-300 dark:border-amber-800",
+      stateLabel: "Returned",
     },
   };
 
-  const statusBadge: Record<number, { label: string; className: string }> = {
+  const statusBadge: Record<
+    number,
+    { label: string; description: string; className: string; iconClass: string }
+  > = {
     0: {
       label: "Draft",
+      description: "Ready for editing",
       className:
-        "bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700",
+        "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700",
+      iconClass:
+        "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300",
     },
     1: {
-      label: "Pending — Checked by",
+      label: "Awaiting Checked by",
+      description: "First approval is pending",
       className:
-        "bg-blue-50 dark:bg-blue-900/30 text-blue-600 border border-blue-200 dark:border-blue-800",
+        "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
+      iconClass:
+        "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300",
     },
     2: {
-      label: "Pending — Noted by",
+      label: "Awaiting Noted by",
+      description: "Final approval is pending",
       className:
-        "bg-blue-50 dark:bg-blue-900/30 text-blue-600 border border-blue-200 dark:border-blue-800",
+        "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
+      iconClass:
+        "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300",
     },
     3: {
-      label: "Pending — Completion",
+      label: "Noted by",
+      description: "Approval recorded",
       className:
-        "bg-blue-50 dark:bg-blue-900/30 text-blue-600 border border-blue-200 dark:border-blue-800",
+        "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+      iconClass:
+        "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300",
     },
     4: {
       label: "Completed",
+      description: "All approvals completed",
       className:
-        "bg-green-50 dark:bg-green-900/30 text-green-600 border border-green-200 dark:border-green-800",
+        "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+      iconClass:
+        "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300",
     },
     5: {
       label: "Rejected",
+      description: "Approval was stopped",
       className:
-        "bg-red-50 dark:bg-red-900/30 text-red-600 border border-red-200 dark:border-red-800",
+        "bg-white dark:bg-slate-900 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800",
+      iconClass: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300",
     },
     6: {
       label: "Returned",
+      description: "Returned for revision",
       className:
-        "bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 border border-yellow-200 dark:border-yellow-800",
+        "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800",
+      iconClass:
+        "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300",
     },
   };
 
@@ -286,17 +354,38 @@ function ApprovalTimeline({
 
   // Show rejection/return banner if terminal
   const showBanner = transactionStatus === 5 || transactionStatus === 6;
+  const terminalDate = terminalLog
+    ? formatLogDate(terminalLog.log_created_at)
+    : null;
+  const terminalClass =
+    transactionStatus === 5
+      ? "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200"
+      : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200";
+  const terminalIconClass =
+    transactionStatus === 5
+      ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300"
+      : "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300";
 
   return (
-    <div className="mt-8 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-5 bg-gray-50 dark:bg-gray-800/50">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-semibold text-sm">
-          <LuTimer className="text-blue-500 w-4 h-4" />
-          <span>Approval Status</span>
+    <section className="mt-8 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-4 border-b border-slate-100 px-4 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex items-center gap-3">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${badge.iconClass}`}
+          >
+            <LuTimer className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-slate-950 dark:text-slate-100">
+              Approval Status
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              {badge.description}
+            </p>
+          </div>
         </div>
         <span
-          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${badge.className}`}
+          className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
         >
           {badge.label}
         </span>
@@ -305,64 +394,123 @@ function ApprovalTimeline({
       {/* Rejection/Return banner */}
       {showBanner && terminalLog && (
         <div
-          className={`mb-4 rounded-lg px-3 py-2.5 text-xs border ${
-            transactionStatus === 5
-              ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
-              : "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400"
-          }`}
+          className={`mx-4 mt-4 rounded-lg border px-4 py-3 text-sm ${terminalClass} sm:mx-5`}
         >
-          <span className="font-semibold">{terminalLog.log_actor_name}</span>{" "}
-          {transactionStatus === 5 ? "rejected" : "returned"} this transaction
-          {terminalLog.log_comment && (
-            <span className="block mt-1 italic">
-              "{terminalLog.log_comment}"
-            </span>
-          )}
+          <div className="flex gap-3">
+            <div
+              className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${terminalIconClass}`}
+            >
+              {transactionStatus === 5 ? (
+                <LuX className="h-4 w-4" />
+              ) : (
+                <LuUndo2 className="h-4 w-4" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold">
+                {terminalLog.log_actor_name}{" "}
+                {transactionStatus === 5 ? "rejected" : "returned"} this
+                transaction
+              </p>
+              {terminalDate && (
+                <p className="mt-0.5 text-xs opacity-75">{terminalDate}</p>
+              )}
+              {terminalLog.log_comment && (
+                <p className="mt-2 text-sm italic opacity-90">
+                  "{terminalLog.log_comment}"
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Timeline */}
-      <div className="flex items-start">
-        {steps.map((step, idx) => {
-          const cfg = statusConfig[step.status];
-          const isLast = idx === steps.length - 1;
+      <div className="px-4 py-5 sm:px-5">
+        <div className="hidden sm:grid sm:grid-cols-4 sm:gap-0">
+          {steps.map((step, idx) => {
+            const cfg = statusConfig[step.status];
+            const isLast = idx === steps.length - 1;
 
-          return (
-            <div
-              key={step.label}
-              className="flex items-start flex-1 last:flex-none"
-            >
-              {/* Step dot + label + meta */}
-              <div className="flex flex-col items-center gap-1">
+            return (
+              <div key={step.label} className="relative min-w-0 px-2">
+                {!isLast && (
+                  <div
+                    className={`absolute left-[calc(50%+18px)] right-[calc(-50%+18px)] top-4 h-px ${cfg.line}`}
+                  />
+                )}
+
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border ${cfg.dot}`}
+                  >
+                    {cfg.icon}
+                  </div>
+                  <div className="mt-2 min-h-16.5">
+                    <div className={`text-sm font-semibold ${cfg.label}`}>
+                      {step.label}
+                    </div>
+                    <span
+                      className={`mt-1.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.pill}`}
+                    >
+                      {cfg.stateLabel}
+                    </span>
+                    {(step.actor || step.date) && (
+                      <div className={`mt-2 text-xs leading-5 ${cfg.meta}`}>
+                        {step.actor && <div>{step.actor}</div>}
+                        {step.date && <div>{step.date}</div>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="space-y-4 sm:hidden">
+          {steps.map((step, idx) => {
+            const cfg = statusConfig[step.status];
+            const isLast = idx === steps.length - 1;
+
+            return (
+              <div key={step.label} className="relative flex gap-3">
+                {!isLast && (
+                  <div
+                    className={`absolute left-4 top-8 h-[calc(100%+1rem)] w-px ${cfg.line}`}
+                  />
+                )}
                 <div
-                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 ${cfg.dot}`}
+                  className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${cfg.dot}`}
                 >
                   {cfg.icon}
                 </div>
-                <span className={`text-xs whitespace-nowrap ${cfg.label}`}>
-                  {step.label}
-                </span>
-                {step.actor && (
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                    {step.actor}
-                  </span>
-                )}
-                {step.date && (
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                    {step.date}
-                  </span>
-                )}
+                <div className="min-w-0 pb-2">
+                  <div className={`text-sm font-semibold ${cfg.label}`}>
+                    {step.label}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.pill}`}
+                    >
+                      {cfg.stateLabel}
+                    </span>
+                    {step.date && (
+                      <span className={`text-xs ${cfg.meta}`}>{step.date}</span>
+                    )}
+                  </div>
+                  {step.actor && (
+                    <div className={`mt-1 text-xs ${cfg.meta}`}>
+                      {step.actor}
+                    </div>
+                  )}
+                </div>
               </div>
-
-              {/* Connector */}
-              {!isLast && (
-                <div className={`h-0.5 flex-1 mx-2 mt-3.5 ${cfg.line}`} />
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -435,7 +583,13 @@ function ActionDropdown({ item }: { item: DropdownItem }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-type ActiveModal = "none" | "reject" | "return";
+type ActiveModal =
+  | "none"
+  | "submit"
+  | "draft"
+  | "approve"
+  | "reject"
+  | "return";
 
 export default function EditTransactionEntries() {
   const [isAddHuOpen, setIsAddHuOpen] = useState(false);
@@ -503,20 +657,24 @@ export default function EditTransactionEntries() {
   }, [transactionEntriesData, reset]);
 
   // ── Form submit (Submit for Approval) ──
-  const onSubmit = (values: TransactionEntryFormValues) => {
+  const submitForApproval = (
+    values: TransactionEntryFormValues,
+    comment?: string,
+  ) => {
     updateMutate(
       { ...values, is_draft: false },
       {
         onSuccess: () => {
           // After saving fields, submit for approval
-          submitMutate(undefined, {
+          submitMutate(comment, {
             onSuccess: () => {
               toast({
                 type: "success",
                 title: "Submitted for Approval",
                 description: "Transaction has been submitted.",
               });
-              navigate(-1);
+              setActiveModal("none");
+              // navigate(-1);
             },
             onError: (err) => {
               toast({
@@ -538,8 +696,12 @@ export default function EditTransactionEntries() {
     );
   };
 
+  const openSubmitConfirmation = () => {
+    setActiveModal("submit");
+  };
+
   // ── Save Draft ──
-  const onSaveDraft = () => {
+  const saveDraft = () => {
     const values = getValues();
     updateMutate(
       { ...values, is_draft: true },
@@ -550,6 +712,7 @@ export default function EditTransactionEntries() {
             title: "Saved as Draft",
             description: "Transaction entry has been saved as draft.",
           });
+          setActiveModal("none");
         },
         onError: (err) => {
           toast({
@@ -562,16 +725,21 @@ export default function EditTransactionEntries() {
     );
   };
 
+  const onSubmitConfirmation = (comment?: string) => {
+    submitForApproval(getValues(), comment);
+  };
+
   // ── Approve ──
-  const handleApprove = () => {
-    approveMutate(undefined, {
+  const handleApprove = (comment?: string) => {
+    approveMutate(comment, {
       onSuccess: () => {
         toast({
           type: "success",
           title: "Approved",
           description: "Transaction has been approved and advanced.",
         });
-        navigate(-1);
+        setActiveModal("none");
+        // navigate(-1);
       },
       onError: (err) => {
         toast({
@@ -593,7 +761,7 @@ export default function EditTransactionEntries() {
           description: "Transaction has been rejected.",
         });
         setActiveModal("none");
-        navigate(-1);
+        // navigate(-1);
       },
       onError: (err) => {
         toast({
@@ -615,7 +783,7 @@ export default function EditTransactionEntries() {
           description: "Transaction has been returned to the creator.",
         });
         setActiveModal("none");
-        navigate(-1);
+        // navigate(-1);
       },
       onError: (err) => {
         toast({
@@ -662,7 +830,13 @@ export default function EditTransactionEntries() {
   }
 
   const txStatus = transactionEntriesData.transaction_status ?? 0;
-  const isApprovalView = txStatus === 1 || txStatus === 2 || txStatus === 3;
+  const isApprovalView = txStatus === 1 || txStatus === 2;
+  const nextApprovalLabels: Record<number, string> = {
+    1: "Checked by",
+    2: "Noted by and mark it Completed",
+  };
+  const nextApprovalLabel =
+    nextApprovalLabels[txStatus] ?? "the next approval step";
 
   // Editable when Draft or Returned
   const isEditable = txStatus === 0 || txStatus === 6;
@@ -691,7 +865,7 @@ export default function EditTransactionEntries() {
             <div className="flex items-center gap-1.5 sm:hidden">
               <button
                 type="button"
-                onClick={handleApprove}
+                onClick={() => setActiveModal("approve")}
                 disabled={isApproving}
                 className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-green-300 dark:border-green-700 text-green-600 bg-white dark:bg-gray-700 hover:bg-green-50 transition font-medium disabled:opacity-50"
               >
@@ -723,7 +897,7 @@ export default function EditTransactionEntries() {
       {/* Form Card */}
       <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded shadow border border-gray-200 dark:border-gray-700">
         <form
-          onSubmit={handleSubmit(onSubmit)}
+          onSubmit={handleSubmit(openSubmitConfirmation)}
           noValidate
           className="bg-white dark:bg-gray-900 mx-2 sm:mx-6 my-2"
         >
@@ -979,7 +1153,7 @@ export default function EditTransactionEntries() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleApprove}
+                  onClick={() => setActiveModal("approve")}
                   disabled={isApproving}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 bg-white dark:bg-gray-700 hover:bg-green-50 transition font-medium disabled:opacity-50"
                 >
@@ -991,7 +1165,7 @@ export default function EditTransactionEntries() {
               <>
                 <button
                   type="button"
-                  onClick={onSaveDraft}
+                  onClick={() => setActiveModal("draft")}
                   disabled={isPending}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-100 transition font-medium disabled:opacity-50"
                 >
@@ -1022,6 +1196,46 @@ export default function EditTransactionEntries() {
           toast={toast}
           huId={id!}
           onClose={() => setIsAddHuOpen(false)}
+        />
+      )}
+
+      {/* Submit Modal */}
+      {activeModal === "submit" && (
+        <ActionModal
+          title="Submit for Approval"
+          description="This will save the current transaction details and submit the transaction for approval."
+          confirmLabel="Submit"
+          confirmClass="border border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-700 hover:bg-blue-50"
+          isPending={isPending || isSubmitting}
+          onConfirm={onSubmitConfirmation}
+          onClose={() => setActiveModal("none")}
+        />
+      )}
+
+      {/* Save Draft Modal */}
+      {activeModal === "draft" && (
+        <ActionModal
+          title="Save as Draft"
+          description="This will save your current changes as a draft. The transaction will not be submitted for approval."
+          confirmLabel="Save Draft"
+          confirmClass="border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-100"
+          isPending={isPending}
+          showComment={false}
+          onConfirm={saveDraft}
+          onClose={() => setActiveModal("none")}
+        />
+      )}
+
+      {/* Approve Modal */}
+      {activeModal === "approve" && (
+        <ActionModal
+          title="Approve Transaction"
+          description={`This will advance the transaction to ${nextApprovalLabel}.`}
+          confirmLabel="Approve"
+          confirmClass="border border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 bg-white dark:bg-gray-700 hover:bg-green-50"
+          isPending={isApproving}
+          onConfirm={handleApprove}
+          onClose={() => setActiveModal("none")}
         />
       )}
 
